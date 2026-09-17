@@ -1,0 +1,13 @@
+{
+  "name": "FERDEL Gestión",
+  "short_name": "FERDEL",
+  "description": "Inventario, órdenes de trabajo y control de costos de FERDEL Perú S.A.C.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f4f7fb",
+  "theme_color": "#071936",
+  "orientation": "any",
+  "icons": [
+    { "src": "app-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
