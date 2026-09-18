@@ -27,20 +27,20 @@ npm run electron
 - Costos de materiales, mano de obra, adicionales, ganancia y margen.
 - Directorios de clientes y proveedores.
 - Centro de reportes y gestión de usuarios.
-- Persistencia central en Supabase (PostgreSQL) con autenticación y Row Level Security.
-- SQLite/localStorage disponible únicamente como respaldo cuando Supabase no está configurado.
+- Persistencia PostgreSQL central con autenticación y políticas de seguridad por usuario.
+- SQLite/localStorage disponible únicamente como respaldo cuando el servidor central no está configurado.
 
-## Configuración de Supabase
+## Configuración de la base central
 
-1. Crea un proyecto en Supabase.
-2. Abre **SQL Editor** y ejecuta [`supabase/schema.sql`](supabase/schema.sql).
+1. Crea el proyecto de base de datos central.
+2. Abre el editor SQL del servicio y ejecuta [`supabase/schema.sql`](supabase/schema.sql).
 3. En **Authentication > Users**, crea el primer usuario.
 4. Copia `.env.example` como `.env.local` y completa la URL y la clave pública del proyecto.
 5. Ejecuta `npm run desktop:dev`.
 
 Nunca coloques `service_role` ni una secret key en las variables `VITE_*`. La aplicación usa la clave pública y protege los datos mediante autenticación y políticas RLS.
 
-Si `VITE_SUPABASE_SEED_DEMO=true`, la aplicación cargará los datos demostrativos cuando productos y órdenes estén vacíos. Para producción debe permanecer en `false`.
+Si la opción de datos demostrativos está activa, la aplicación cargará registros de ejemplo cuando productos y órdenes estén vacíos. Para producción debe permanecer desactivada.
 
 ## Identidad visual
 

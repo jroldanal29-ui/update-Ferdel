@@ -1,6 +1,6 @@
 {
   "name": "ferdel-gestion",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "private": true,
   "type": "module",
   "description": "Sistema de inventarios, órdenes de trabajo y costos para FERDEL Perú S.A.C.",

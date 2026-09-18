@@ -1,5 +1,5 @@
--- FERDEL Gestión · Esquema inicial para Supabase/PostgreSQL
--- Ejecutar una vez desde SQL Editor en el panel de Supabase.
+-- FERDEL Gestión · Esquema PostgreSQL de la base central
+-- Ejecutar una vez desde el editor SQL del servicio de base de datos.
 
 create extension if not exists pgcrypto;
 
