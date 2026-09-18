@@ -2,7 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('ferdelDesktop', {
   platform: process.platform,
-  version: '1.2.0',
+  version: '1.2.1',
   database: {
     load: (key) => ipcRenderer.invoke('db:load', key),
     save: (key, value) => ipcRenderer.invoke('db:save', key, value),

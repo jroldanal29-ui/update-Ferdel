@@ -52,4 +52,4 @@ La versión 1.2.0 incorpora búsqueda, descarga e instalación de actualizacione
 
 ## Acceso móvil
 
-El botón **Acceso móvil** genera un QR para abrir la interfaz responsive desde un celular. Consulta [`ACCESO-MOVIL.md`](ACCESO-MOVIL.md) para usarlo en la red Wi-Fi local o configurar una URL pública.
+El botón **Acceso móvil** genera un QR hacia la aplicación publicada en GitHub Pages. Funciona aunque el celular use datos móviles y la computadora esté en otra red. Consulta [`ACCESO-MOVIL.md`](ACCESO-MOVIL.md).

@@ -82,7 +82,7 @@ function App() {
   const [userEmail, setUserEmail] = useState(isSupabaseConfigured ? '' : 'Modo local')
   const [syncing, setSyncing] = useState(false)
   const [update, setUpdate] = useState<UpdateState | null>(null)
-  const [appVersion, setAppVersion] = useState('1.2.0')
+  const [appVersion, setAppVersion] = useState('1.2.1')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [mobileAccess, setMobileAccess] = useState<{ url: string; local: boolean } | null>(null)
   const [infoPanel, setInfoPanel] = useState<'settings' | 'help' | 'notifications' | null>(null)

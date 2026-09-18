@@ -1,6 +1,21 @@
 # Acceso móvil mediante QR
 
-## Uso inmediato en la misma red
+## Acceso desde cualquier red
+
+La aplicación móvil está publicada en:
+
+`https://jroldanal29-ui.github.io/update-Ferdel/`
+
+El QR de la versión 1.2.1 y posteriores utiliza esta dirección. El celular puede conectarse con datos móviles y la computadora puede estar en otra red Wi-Fi o incluso apagada. Ambos dispositivos consultan directamente la misma base de Supabase.
+
+1. Abre FERDEL Gestión y presiona **Acceso móvil**.
+2. Escanea el QR con la cámara del celular.
+3. Inicia sesión con un usuario de Supabase.
+4. En el navegador móvil puedes usar **Agregar a pantalla de inicio** para abrirlo como una aplicación.
+
+GitHub Actions vuelve a publicar automáticamente la interfaz móvil cada vez que se actualiza la rama `main`.
+
+## Alternativa en la misma red
 
 1. Abre FERDEL Gestión en la computadora.
 2. Presiona **Acceso móvil** en la barra superior.
@@ -10,9 +25,9 @@
 
 La computadora sirve la interfaz móvil en el puerto `4173`. Si Windows pregunta por el Firewall, permite el acceso en **redes privadas**. La aplicación de escritorio debe permanecer abierta.
 
-## Acceso desde cualquier lugar
+## Dominio personalizado opcional
 
-Despliega el contenido compilado de `dist/` en un servicio HTTPS como Vercel, Netlify o Cloudflare Pages. Después agrega la dirección pública a `.env.local`:
+Si más adelante cuentas con un dominio, puedes reemplazar GitHub Pages por una dirección como:
 
 ```env
 VITE_MOBILE_APP_URL=https://gestion.ferdel.pe
