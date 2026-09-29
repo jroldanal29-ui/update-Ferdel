@@ -18,7 +18,7 @@ import type { Movement, Product, StockStatus, WorkOrder } from './types'
 import {
   isSupabaseConfigured, loadCentralData, removeCentralProduct, saveCentralOrder,
   saveCentralProduct, signIn, signOut, supabase, loadCentralMovements, saveCentralMovement,
-  loadCentralDirectory, saveCentralDirectory, loadCentralUsers, registerCentralUser, updateCentralUser,
+  loadCentralDirectory, saveCentralDirectory, loadCentralUsers, registerCentralUser, updateCentralUser, deleteCentralUser, loadCurrentProfile,
 } from './lib/supabase'
 import type { SystemUser } from './lib/supabase'
 import { QRCodeSVG } from 'qrcode.react'
@@ -83,12 +83,14 @@ function App() {
   const [toast, setToast] = useState('')
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured)
   const [userEmail, setUserEmail] = useState(isSupabaseConfigured ? '' : 'Modo local')
+  const [currentUser, setCurrentUser] = useState<SystemUser | null>(null)
+  const [userMenu, setUserMenu] = useState<'top' | 'sidebar' | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [update, setUpdate] = useState<UpdateState | null>(null)
-  const [appVersion, setAppVersion] = useState('1.2.4')
+  const [appVersion, setAppVersion] = useState('1.2.5')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [mobileAccess, setMobileAccess] = useState<{ url: string; local: boolean } | null>(null)
-  const [infoPanel, setInfoPanel] = useState<'settings' | 'help' | 'notifications' | null>(null)
+  const [infoPanel, setInfoPanel] = useState<'settings' | 'help' | 'notifications' | 'account' | null>(null)
 
   useEffect(() => {
     if (!supabase) return
@@ -106,6 +108,7 @@ function App() {
   useEffect(() => {
     if (isSupabaseConfigured) {
       if (!userEmail) return
+      void loadCurrentProfile().then(setCurrentUser).catch(() => undefined)
       setSyncing(true)
       loadCentralData().then(data => {
         setProducts(data.products)
@@ -173,6 +176,11 @@ function App() {
     if (location.protocol.startsWith('http')) return setMobileAccess({ url: location.origin, local: true })
     notify('No se pudo determinar la dirección móvil')
   }
+  const displayName = currentUser?.fullName || (userEmail && userEmail !== 'Modo local' ? userEmail.split('@')[0] : 'Usuario local')
+  const displayRole = currentUser ? roleLabels[currentUser.role] : isSupabaseConfigured ? 'Usuario' : 'Modo local'
+  const initials = displayName.split(' ').filter(Boolean).map(part => part[0]).join('').slice(0, 2).toUpperCase() || 'US'
+  const openUserPanel = (source: 'top' | 'sidebar') => setUserMenu(current => current === source ? null : source)
+  const closeUserMenu = () => setUserMenu(null)
 
   if (!authReady) return <div className="auth-shell"><div className="auth-loading"><Brand /><div className="spinner" />Conectando con el servidor…</div></div>
   if (isSupabaseConfigured && !userEmail) return <LoginScreen />
@@ -204,7 +212,7 @@ function App() {
         <button className="nav-item" onClick={() => void checkForUpdates()}><RefreshCw size={19} /><span>Buscar actualización</span></button>
         <button className="nav-item" onClick={() => setInfoPanel('settings')}><Settings size={19} /><span>Configuración</span></button>
         {isSupabaseConfigured && <button className="nav-item" onClick={() => void signOut()}><LogOut size={19} /><span>Cerrar sesión</span></button>}
-        <div className="user-card"><div className="avatar">AT</div><div><strong>Ana Torres</strong><small>Administradora</small></div><MoreHorizontal size={18} /></div>
+        <button className="user-card" type="button" aria-expanded={userMenu==='sidebar'} onClick={()=>openUserPanel('sidebar')}><div className="avatar">{initials}</div><div><strong>{displayName}</strong><small>{displayRole}</small></div><MoreHorizontal size={18} /></button>
       </div>
     </aside>
 
@@ -212,7 +220,7 @@ function App() {
       <header className="topbar">
         <button className="mobile-menu-button" onClick={() => setMobileNavOpen(true)}><Menu size={20}/></button>
         <div className="global-search"><Search size={18} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar producto, OT, placa o cliente..." /><kbd>⌘ K</kbd></div>
-        <div className="top-actions"><span className={syncing ? 'sync-state syncing' : 'sync-state'}><i />{syncing ? 'Sincronizando' : isSupabaseConfigured ? 'Servidor conectado' : 'Modo local'}</span><button className="mobile-access-button" title="Acceso móvil" onClick={() => void openMobileAccess()}><Smartphone size={19}/><span>Acceso móvil</span></button><button title="Ayuda" onClick={() => setInfoPanel('help')}><HelpCircle size={20} /></button><button className="notification" title="Notificaciones" onClick={() => setInfoPanel('notifications')}><Bell size={20} /><i /></button><span className="divider" /><div className="top-user"><div className="avatar small">AT</div><div><strong>Ana Torres</strong><small>{userEmail}</small></div><ChevronDown size={16} /></div></div>
+        <div className="top-actions"><span className={syncing ? 'sync-state syncing' : 'sync-state'}><i />{syncing ? 'Sincronizando' : isSupabaseConfigured ? 'Servidor conectado' : 'Modo local'}</span><button className="mobile-access-button" title="Acceso móvil" onClick={() => void openMobileAccess()}><Smartphone size={19}/><span>Acceso móvil</span></button><button title="Ayuda" onClick={() => setInfoPanel('help')}><HelpCircle size={20} /></button><button className="notification" title="Notificaciones" onClick={() => setInfoPanel('notifications')}><Bell size={20} /><i /></button><span className="divider" /><button className="top-user" type="button" aria-expanded={userMenu==='top'} onClick={()=>openUserPanel('top')}><div className="avatar small">{initials}</div><div><strong>{displayName}</strong><small>{userEmail}</small></div><ChevronDown className={userMenu==='top'?'rotated':''} size={16} /></button></div>
       </header>
 
       <div className="content">
@@ -227,9 +235,11 @@ function App() {
         {page === 'Clientes' && <Directory type="Clientes" query={query} notify={notify} />}
         {page === 'Proveedores' && <Directory type="Proveedores" query={query} notify={notify} />}
         {page === 'Reportes' && <Reports notify={notify} />}
-        {page === 'Usuarios' && <UsersPage notify={notify} />}
+        {page === 'Usuarios' && <UsersPage notify={notify} currentUser={currentUser} />}
       </div>
     </main>
+
+    {userMenu&&<><button className="user-menu-dismiss" aria-label="Cerrar menú de usuario" onClick={closeUserMenu}/><div className={`user-menu${userMenu==='sidebar'?' sidebar-menu':''}`}><div className="user-menu-head"><div className="avatar">{initials}</div><div><strong>{displayName}</strong><span>{userEmail}</span><small>{displayRole}</small></div></div><button onClick={()=>{closeUserMenu();setInfoPanel('account')}}><UserRound size={16}/><span>Mi cuenta</span></button><button onClick={()=>{closeUserMenu();setInfoPanel('settings')}}><Settings size={16}/><span>Configuración</span></button>{currentUser?.role==='administrador'&&<button onClick={()=>{closeUserMenu();setPage('Usuarios');setMobileNavOpen(false)}}><ShieldCheck size={16}/><span>Administrar usuarios</span></button>}{isSupabaseConfigured&&<button className="logout-option" onClick={()=>{closeUserMenu();void signOut()}}><LogOut size={16}/><span>Cerrar sesión</span></button>}</div></>}
 
     {productModal && <ProductModal value={productModal} onClose={() => setProductModal(null)} onSave={p => {
       const saved = productModal === 'new' ? { ...p, id: Date.now() } : p
@@ -246,7 +256,7 @@ function App() {
       void window.ferdelDesktop?.updates.download()
     }} onInstall={() => void window.ferdelDesktop?.updates.install()} />}
     {mobileAccess && <MobileAccessModal value={mobileAccess} onClose={() => setMobileAccess(null)} notify={notify} />}
-    {infoPanel && <InfoPanel type={infoPanel} products={products} appVersion={appVersion} onClose={() => setInfoPanel(null)} onMobile={() => { setInfoPanel(null); void openMobileAccess() }} onUpdates={() => { setInfoPanel(null); void checkForUpdates() }} />}
+    {infoPanel && <InfoPanel type={infoPanel} products={products} appVersion={appVersion} currentUser={currentUser} userEmail={userEmail} onClose={() => setInfoPanel(null)} onMobile={() => { setInfoPanel(null); void openMobileAccess() }} onUpdates={() => { setInfoPanel(null); void checkForUpdates() }} />}
     {toast && <div className="toast"><CheckCircle2 size={19} />{toast}</div>}
   </div>
 }
@@ -450,15 +460,17 @@ return <><PageHeading eyebrow="ANÁLISIS" title="Centro de reportes" subtitle="G
 
 const roleLabels: Record<SystemUser['role'], string> = { administrador: 'Administradora', almacen: 'Almacén', operaciones: 'Operaciones', gerencia: 'Gerencia' }
 
-function UsersPage({notify}:{notify:(s:string)=>void}){
+function UsersPage({notify,currentUser}:{notify:(s:string)=>void,currentUser:SystemUser|null}){
   const [users,setUsers]=useState<SystemUser[]>([])
   const [editing,setEditing]=useState<SystemUser|'new'|null>(null)
   const [loading,setLoading]=useState(isSupabaseConfigured)
+  const canManage=currentUser?.role==='administrador'&&currentUser.active
   useEffect(()=>{
     if(!isSupabaseConfigured){setLoading(false);return}
     void loadCentralUsers().then(setUsers).catch(error=>notify(`No se pudieron cargar los usuarios: ${error.message}`)).finally(()=>setLoading(false))
   },[])
   const save=async(form:UserFormData)=>{
+    if(!canManage)throw new Error('Solo un administrador puede editar cuentas')
     if(editing==='new'){
       const created=await registerCentralUser(form)
       setUsers(current=>[...current,created])
@@ -470,7 +482,13 @@ function UsersPage({notify}:{notify:(s:string)=>void}){
     }
     setEditing(null)
   }
-  return <><PageHeading eyebrow="SEGURIDAD" title="Usuarios y permisos" subtitle="Administra cuentas reales, contraseñas y niveles de acceso." actions={<button className="btn primary" onClick={()=>setEditing('new')}><Plus size={18}/> Nuevo usuario</button>}/><section className="panel table-panel"><div className="table-wrap"><table><thead><tr><th>USUARIO</th><th>CORREO</th><th>ROL</th><th>REGISTRADO</th><th>ESTADO</th><th/></tr></thead><tbody>{loading?<tr><td colSpan={6}>Cargando usuarios…</td></tr>:users.length?users.map(user=>{const initials=user.fullName.split(' ').filter(Boolean).map(part=>part[0]).join('').slice(0,2).toUpperCase();return <tr key={user.id}><td><div className="person"><div>{initials}</div><strong>{user.fullName}</strong></div></td><td>{user.email||'Correo no sincronizado'}</td><td><span className="role-chip"><ShieldCheck size={14}/>{roleLabels[user.role]}</span></td><td>{new Date(user.createdAt).toLocaleDateString('es-PE')}</td><td><span className={`status ${user.active?'normal':'cancelada'}`}>{user.active?'Activo':'Inactivo'}</span></td><td><button className="icon-button" title="Editar usuario" onClick={()=>setEditing(user)}><Pencil size={16}/></button></td></tr>}):<tr><td colSpan={6}>No hay usuarios registrados.</td></tr>}</tbody></table></div></section>{editing&&<UserModal value={editing} onClose={()=>setEditing(null)} onSave={save}/>}</>
+  const remove=async(user:SystemUser)=>{
+    if(!canManage)return notify('Solo un administrador puede eliminar cuentas')
+    if(user.id===currentUser?.id)return notify('No puedes eliminar tu propia cuenta mientras está en uso')
+    if(!confirm(`¿Eliminar definitivamente la cuenta de ${user.fullName}?`))return
+    try{await deleteCentralUser(user.id);setUsers(current=>current.filter(item=>item.id!==user.id));notify('Cuenta eliminada del autenticador')}catch(error){notify(`No se pudo eliminar la cuenta: ${error instanceof Error?error.message:'Error desconocido'}`)}
+  }
+  return <><PageHeading eyebrow="SEGURIDAD" title="Usuarios y permisos" subtitle={canManage?'Administra cuentas reales, contraseñas y niveles de acceso.':'Puedes consultar los usuarios; solo un administrador puede modificarlos.'} actions={canManage?<button className="btn primary" onClick={()=>setEditing('new')}><Plus size={18}/> Nuevo usuario</button>:undefined}/><section className="panel table-panel"><div className="table-wrap"><table><thead><tr><th>USUARIO</th><th>CORREO</th><th>ROL</th><th>REGISTRADO</th><th>ESTADO</th><th/></tr></thead><tbody>{loading?<tr><td colSpan={6}>Cargando usuarios…</td></tr>:users.length?users.map(user=>{const initials=user.fullName.split(' ').filter(Boolean).map(part=>part[0]).join('').slice(0,2).toUpperCase();return <tr key={user.id}><td><div className="person"><div>{initials}</div><strong>{user.fullName}</strong></div></td><td>{user.email||'Correo no sincronizado'}</td><td><span className="role-chip"><ShieldCheck size={14}/>{roleLabels[user.role]}</span></td><td>{new Date(user.createdAt).toLocaleDateString('es-PE')}</td><td><span className={`status ${user.active?'normal':'cancelada'}`}>{user.active?'Activo':'Inactivo'}</span></td><td>{canManage&&<div className="row-actions"><button title="Editar usuario" onClick={()=>setEditing(user)}><Pencil size={16}/></button>{user.id!==currentUser?.id&&<button className="danger-hover" title="Eliminar cuenta" onClick={()=>void remove(user)}><Trash2 size={16}/></button>}</div>}</td></tr>}):<tr><td colSpan={6}>No hay usuarios registrados.</td></tr>}</tbody></table></div></section>{editing&&canManage&&<UserModal value={editing} onClose={()=>setEditing(null)} onSave={save}/>}</>
 }
 
 function PanelHead({title,subtitle,action}:{title:string,subtitle:string,action?:React.ReactNode}){return <div className="panel-head"><div><h2>{title}</h2><p>{subtitle}</p></div>{action}</div>}
@@ -479,10 +497,15 @@ function StatusBadge({status}:{status:WorkOrder['status']}){return <span classNa
 function StockBadge({status}:{status:StockStatus}){return <span className={`stock-badge ${status.toLowerCase().replaceAll(' ','-')}`}><i/>{status}</span>}
 function CostLine({label,value,total,color}:{label:string,value:number,total:number,color:string}){const percentage=total?value/total*100:0;return <div className="cost-line"><div><span>{label}</span><strong>{money(value)}</strong></div><div className="cost-bar"><i style={{width:`${percentage}%`,background:color}}/></div><small>{Math.round(percentage)}% del costo total</small></div>}
 
-function InfoPanel({type,products,appVersion,onClose,onMobile,onUpdates}:{type:'settings'|'help'|'notifications',products:Product[],appVersion:string,onClose:()=>void,onMobile:()=>void,onUpdates:()=>void}){
+function InfoPanel({type,products,appVersion,currentUser,userEmail,onClose,onMobile,onUpdates}:{type:'settings'|'help'|'notifications'|'account',products:Product[],appVersion:string,currentUser:SystemUser|null,userEmail:string,onClose:()=>void,onMobile:()=>void,onUpdates:()=>void}){
   if(type==='notifications'){
     const alerts=products.filter(product=>stockStatus(product)!=='Normal')
     return <Modal title="Centro de notificaciones" subtitle={`${alerts.length} alertas requieren revisión`} onClose={onClose}><div className="info-panel-list">{alerts.length?alerts.map(product=><div className="info-list-row" key={product.id}><div className="alert-symbol"><AlertTriangle size={17}/></div><div><strong>{product.name}</strong><small>{stockStatus(product)} · Stock actual: {product.stock} · Mínimo: {product.min}</small></div></div>):<div className="empty-state"><CheckCircle2 size={27}/><strong>Todo está en orden</strong><span>No tienes alertas pendientes.</span></div>}</div><div className="modal-actions info-actions"><button className="btn primary" onClick={onClose}>Entendido</button></div></Modal>
+  }
+  if(type==='account'){
+    const name=currentUser?.fullName||userEmail.split('@')[0]||'Usuario'
+    const initials=name.split(' ').filter(Boolean).map(part=>part[0]).join('').slice(0,2).toUpperCase()
+    return <Modal title="Mi cuenta" subtitle="Información del usuario conectado" onClose={onClose}><div className="account-summary"><div className="avatar account-avatar">{initials}</div><div><strong>{name}</strong><span>{currentUser?.email||userEmail}</span><small>{currentUser?roleLabels[currentUser.role]:'Usuario del sistema'}</small></div></div><div className="settings-list"><div><span>Estado de la cuenta</span><strong className="positive">{currentUser?.active===false?'Inactiva':'Activa'}</strong></div><div><span>Identificador</span><strong className="account-id">{currentUser?.id||'Sesión local'}</strong></div><div><span>Versión del sistema</span><strong>v{appVersion}</strong></div></div><div className="modal-actions info-actions"><button className="btn primary" onClick={onClose}>Cerrar</button></div></Modal>
   }
   if(type==='help')return <Modal title="Ayuda rápida" subtitle="Guía de las acciones principales" onClose={onClose}><div className="help-grid"><div><Boxes/><strong>Inventario</strong><span>Crea productos, filtra existencias y exporta el listado.</span></div><div><ArrowDownLeft/><strong>Movimientos</strong><span>Registra entradas y salidas; el stock se actualiza automáticamente.</span></div><div><ClipboardList/><strong>Órdenes de trabajo</strong><span>Selecciona una tarjeta para editar estado, progreso y costos.</span></div><div><Smartphone/><strong>Acceso móvil</strong><span>Genera el QR para ingresar desde un celular.</span></div></div><div className="modal-actions info-actions"><button className="btn secondary" onClick={onMobile}><Smartphone size={16}/> Mostrar QR</button><button className="btn primary" onClick={onClose}>Cerrar</button></div></Modal>
   return <Modal title="Configuración del sistema" subtitle="Estado y acciones de la aplicación" onClose={onClose}><div className="settings-list"><div><span>Versión instalada</span><strong>v{appVersion}</strong></div><div><span>Base de datos</span><strong className="positive">Servidor central conectado</strong></div><div><span>Acceso móvil</span><button className="link-btn" onClick={onMobile}>Mostrar código QR <ArrowRight size={15}/></button></div><div><span>Actualizaciones</span><button className="link-btn" onClick={onUpdates}>Buscar ahora <RefreshCw size={14}/></button></div></div><div className="modal-actions info-actions"><button className="btn primary" onClick={onClose}>Guardar y cerrar</button></div></Modal>

@@ -161,6 +161,32 @@ export async function loadCentralUsers(): Promise<SystemUser[]> {
   }))
 }
 
+export async function loadCurrentProfile(): Promise<SystemUser | null> {
+  const client = requireClient()
+  const { data: authData, error: authError } = await client.auth.getUser()
+  if (authError) throw authError
+  if (!authData.user) return null
+  let { data, error } = await client.from('profiles').select('id, full_name, email, role, active, created_at').eq('id', authData.user.id).maybeSingle()
+  if (error) {
+    const fallback = await client.from('profiles').select('id, full_name, role, active, created_at').eq('id', authData.user.id).maybeSingle()
+    if (fallback.error) throw fallback.error
+    data = fallback.data ? { ...fallback.data, email: authData.user.email ?? '' } : null
+    error = null
+  }
+  if (!data) return {
+    id: authData.user.id,
+    fullName: authData.user.user_metadata?.full_name ?? authData.user.email?.split('@')[0] ?? 'Usuario',
+    email: authData.user.email ?? '',
+    role: authData.user.user_metadata?.role ?? 'almacen',
+    active: true,
+    createdAt: authData.user.created_at,
+  }
+  return {
+    id: data.id, fullName: data.full_name, email: data.email || authData.user.email || '',
+    role: data.role, active: data.active, createdAt: data.created_at,
+  }
+}
+
 export async function registerCentralUser(input: { fullName: string; email: string; password: string; role: SystemUser['role'] }): Promise<SystemUser> {
   if (!url || !publishableKey) throw new Error('El servidor central no está configurado')
   // Cliente aislado: crear otra cuenta no reemplaza la sesión del administrador actual.
@@ -189,6 +215,11 @@ export async function updateCentralUser(id: string, input: { fullName: string; r
   const { error } = await requireClient().from('profiles').update({
     full_name: input.fullName.trim(), role: input.role, active: input.active,
   }).eq('id', id)
+  if (error) throw error
+}
+
+export async function deleteCentralUser(id: string) {
+  const { error } = await requireClient().rpc('delete_managed_user', { target_user_id: id })
   if (error) throw error
 }
 

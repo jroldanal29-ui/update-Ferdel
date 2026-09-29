@@ -47,3 +47,22 @@ drop policy if exists "Usuario actualiza su perfil" on public.profiles;
 drop policy if exists "Administradores actualizan perfiles" on public.profiles;
 create policy "Administradores actualizan perfiles" on public.profiles for update to authenticated
 using (public.current_user_is_admin()) with check (public.current_user_is_admin());
+
+create or replace function public.delete_managed_user(target_user_id uuid)
+returns void language plpgsql security definer set search_path = public, auth as $$
+begin
+  if not public.current_user_is_admin() then
+    raise exception 'Solo un administrador puede eliminar cuentas';
+  end if;
+  if target_user_id = auth.uid() then
+    raise exception 'No puedes eliminar tu propia cuenta mientras está en uso';
+  end if;
+  delete from auth.users where id = target_user_id;
+  if not found then
+    raise exception 'La cuenta indicada no existe';
+  end if;
+end;
+$$;
+
+revoke all on function public.delete_managed_user(uuid) from public;
+grant execute on function public.delete_managed_user(uuid) to authenticated;
