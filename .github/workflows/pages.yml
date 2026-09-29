@@ -38,6 +38,9 @@ jobs:
           VITE_SUPABASE_SEED_DEMO: 'false'
           VITE_MOBILE_APP_URL: https://jroldanal29-ui.github.io/update-Ferdel/
 
+      - name: Publicar versión para detección móvil
+        run: node -e "const fs=require('fs');const p=require('./package.json');fs.writeFileSync('dist/version.json',JSON.stringify({version:p.version,publishedAt:new Date().toISOString()}))"
+
       - name: Preparar aplicación web
         run: touch dist/.nojekyll
 

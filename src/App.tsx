@@ -22,9 +22,20 @@ import {
 } from './lib/supabase'
 import type { SystemUser } from './lib/supabase'
 import { QRCodeSVG } from 'qrcode.react'
+import packageJson from '../package.json'
 
 type Page = 'Dashboard' | 'Inventario' | 'Movimientos' | 'Órdenes de trabajo' | 'Costos y rentabilidad' | 'Clientes' | 'Proveedores' | 'Reportes' | 'Usuarios'
 type UserFormData = { fullName: string; email: string; role: SystemUser['role']; password: string; active: boolean }
+
+function isNewerVersion(available: string, current: string) {
+  const next = available.split('.').map(Number)
+  const installed = current.split('.').map(Number)
+  for (let index = 0; index < Math.max(next.length, installed.length); index += 1) {
+    const difference = (next[index] ?? 0) - (installed[index] ?? 0)
+    if (difference !== 0) return difference > 0
+  }
+  return false
+}
 type UpdateState = { status: 'available' | 'downloading' | 'downloaded' | 'error'; version?: string; releaseName?: string; releaseDate?: string; percent?: number; message?: string }
 
 const menu: { section: string; items: { label: Page; icon: typeof LayoutDashboard }[] }[] = [
@@ -87,7 +98,8 @@ function App() {
   const [userMenu, setUserMenu] = useState<'top' | 'sidebar' | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [update, setUpdate] = useState<UpdateState | null>(null)
-  const [appVersion, setAppVersion] = useState('1.2.6')
+  const [appVersion, setAppVersion] = useState(packageJson.version)
+  const [mobileUpdateVersion, setMobileUpdateVersion] = useState<string | null>(null)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [mobileAccess, setMobileAccess] = useState<{ url: string; local: boolean } | null>(null)
   const [infoPanel, setInfoPanel] = useState<'settings' | 'help' | 'notifications' | 'account' | null>(null)
@@ -103,6 +115,39 @@ function App() {
       setAuthReady(true)
     })
     return () => data.subscription.unsubscribe()
+  }, [])
+
+  const checkMobileUpdate = async (manual = false) => {
+    if (window.ferdelDesktop) return false
+    try {
+      const separator = import.meta.env.BASE_URL.endsWith('/') ? '' : '/'
+      const response = await fetch(`${import.meta.env.BASE_URL}${separator}version.json?time=${Date.now()}`, { cache: 'no-store' })
+      if (!response.ok) throw new Error('No se pudo consultar la versión')
+      const data = await response.json() as { version?: string }
+      if (data.version && isNewerVersion(data.version, packageJson.version)) {
+        setMobileUpdateVersion(data.version)
+        return true
+      }
+      if (manual) notify('Ya tienes la versión más reciente')
+      return false
+    } catch {
+      if (manual) notify('No se pudo comprobar la actualización')
+      return false
+    }
+  }
+
+  useEffect(() => {
+    if (window.ferdelDesktop) return
+    void checkMobileUpdate()
+    const interval = window.setInterval(() => void checkMobileUpdate(), 5 * 60 * 1000)
+    const onVisible = () => { if (document.visibilityState === 'visible') void checkMobileUpdate() }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onVisible)
+    return () => {
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onVisible)
+    }
   }, [])
 
   useEffect(() => {
@@ -163,7 +208,7 @@ function App() {
   }
   const checkForUpdates = async () => {
     const updates = window.ferdelDesktop?.updates
-    if (!updates) return notify('La búsqueda de actualizaciones solo está disponible en la aplicación de escritorio')
+    if (!updates) { await checkMobileUpdate(true); return }
     const result = await updates.check()
     if (result.development) notify(`Modo desarrollo · versión ${result.version}`)
     else notify('Buscando actualizaciones…')
@@ -256,6 +301,7 @@ function App() {
       void window.ferdelDesktop?.updates.download()
     }} onInstall={() => void window.ferdelDesktop?.updates.install()} />}
     {mobileAccess && <MobileAccessModal value={mobileAccess} onClose={() => setMobileAccess(null)} notify={notify} />}
+    {mobileUpdateVersion && <MobileUpdateModal currentVersion={packageJson.version} availableVersion={mobileUpdateVersion} onLater={()=>setMobileUpdateVersion(null)} onUpdate={()=>{const url=new URL(window.location.href);url.searchParams.set('version',mobileUpdateVersion);window.location.replace(url.toString())}} />}
     {infoPanel && <InfoPanel type={infoPanel} products={products} appVersion={appVersion} currentUser={currentUser} userEmail={userEmail} onClose={() => setInfoPanel(null)} onMobile={() => { setInfoPanel(null); void openMobileAccess() }} onUpdates={() => { setInfoPanel(null); void checkForUpdates() }} />}
     {toast && <div className="toast"><CheckCircle2 size={19} />{toast}</div>}
   </div>
@@ -308,6 +354,14 @@ function MobileAccessModal({ value, onClose, notify }: { value: { url: string; l
     <div className="qr-url"><span>{value.url}</span><button title="Copiar enlace" onClick={() => void copyLink()}><Copy size={16}/></button></div>
     <div className="qr-actions"><button className="btn secondary" onClick={onClose}>Cerrar</button><button className="btn primary" onClick={() => window.open(value.url, '_blank')}><ExternalLink size={16}/> Abrir enlace</button></div>
     {value.local && <small className="qr-footnote">El acceso móvil estará disponible mientras FERDEL Gestión permanezca abierto en esta computadora.</small>}
+  </div></div>
+}
+
+function MobileUpdateModal({currentVersion,availableVersion,onLater,onUpdate}:{currentVersion:string;availableVersion:string;onLater:()=>void;onUpdate:()=>void}){
+  return <div className="modal-backdrop update-backdrop"><div className="update-modal mobile-update-modal">
+    <button className="update-close" onClick={onLater}><X size={19}/></button>
+    <div className="update-visual mobile-update-visual"><div className="update-orbit"><Smartphone size={32}/><Sparkles size={17}/></div></div>
+    <div className="update-body"><span className="update-eyebrow">ACTUALIZACIÓN MÓVIL DE FERDEL</span><h2>Hay una nueva actualización</h2><p>Ya está disponible una versión mejorada del sistema. Actualiza para obtener las funciones y correcciones más recientes.</p><div className="version-route"><div><small>VERSIÓN ACTUAL</small><strong>v{currentVersion}</strong></div><ArrowRight size={19}/><div><small>NUEVA VERSIÓN</small><strong>v{availableVersion}</strong></div></div><div className="update-actions"><button className="btn secondary" onClick={onLater}>Más tarde</button><button className="btn primary install-button" onClick={onUpdate}><RefreshCw size={17}/> Actualizar ahora</button></div></div>
   </div></div>
 }
 
