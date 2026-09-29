@@ -136,6 +136,7 @@ function createWindow() {
     minHeight: 720,
     backgroundColor: '#f4f7fb',
     title: 'FERDEL Gestión',
+    icon: path.join(__dirname, '..', 'dist', 'brand', 'ferdel-icon.png'),
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),

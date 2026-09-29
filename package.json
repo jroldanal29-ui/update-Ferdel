@@ -1,6 +1,6 @@
 {
   "name": "ferdel-gestion",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "private": true,
   "type": "module",
   "description": "Sistema de inventarios, órdenes de trabajo y costos para FERDEL Perú S.A.C.",
@@ -37,6 +37,7 @@
     "cross-env": "latest",
     "electron": "latest",
     "electron-builder": "latest",
+    "png-to-ico": "^3.0.2",
     "wait-on": "latest"
   },
   "build": {
@@ -51,7 +52,8 @@
       "package.json"
     ],
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "build/ferdel-icon.ico"
     },
     "publish": {
       "provider": "github",
@@ -63,7 +65,9 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "shortcutName": "FERDEL Gestión"
+      "shortcutName": "FERDEL Gestión",
+      "installerIcon": "build/ferdel-icon.ico",
+      "uninstallerIcon": "build/ferdel-icon.ico"
     }
   }
 }

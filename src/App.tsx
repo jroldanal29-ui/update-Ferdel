@@ -57,15 +57,16 @@ function stockStatus(p: Product): StockStatus {
 }
 
 function Brand({ compact = false }: { compact?: boolean }) {
-  return <div className="brand">
-    <div className="brand-mark"><span>F</span><i /></div>
-    {!compact && <div><strong>FERDEL</strong><small>PERÚ S.A.C.</small></div>}
+  const assetBase = import.meta.env.BASE_URL
+  return <div className={compact ? 'brand brand-compact' : 'brand'}>
+    <img className="brand-symbol" src={`${assetBase}brand/ferdel-icon.png`} alt="FERDEL Perú" />
+    <img className="brand-wordmark" src={`${assetBase}brand/ferdel-logo.png`} alt="FERDEL Perú — Conectamos ideas, automatizamos soluciones" />
   </div>
 }
 
 function App() {
   const [page, setPage] = useState<Page>('Dashboard')
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(() => window.innerWidth > 760 && window.innerWidth <= 1120)
   const [query, setQuery] = useState('')
   const [products, setProducts] = useState<Product[]>(() => {
     const saved = localStorage.getItem('ferdel-products')
@@ -82,7 +83,7 @@ function App() {
   const [userEmail, setUserEmail] = useState(isSupabaseConfigured ? '' : 'Modo local')
   const [syncing, setSyncing] = useState(false)
   const [update, setUpdate] = useState<UpdateState | null>(null)
-  const [appVersion, setAppVersion] = useState('1.2.2')
+  const [appVersion, setAppVersion] = useState('1.2.3')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [mobileAccess, setMobileAccess] = useState<{ url: string; local: boolean } | null>(null)
   const [infoPanel, setInfoPanel] = useState<'settings' | 'help' | 'notifications' | null>(null)
@@ -177,10 +178,21 @@ function App() {
   return <div className="app-shell">
     {mobileNavOpen && <button className="mobile-nav-overlay" aria-label="Cerrar menú" onClick={() => setMobileNavOpen(false)} />}
     <aside className={`${collapsed ? 'sidebar collapsed' : 'sidebar'}${mobileNavOpen ? ' mobile-open' : ''}`}>
-      <div className="sidebar-head"><Brand compact={collapsed} /><button onClick={() => setCollapsed(!collapsed)}><Menu size={19} /></button></div>
+      <div className="sidebar-head">
+        <Brand />
+        <button
+          className="sidebar-toggle"
+          type="button"
+          aria-label={collapsed ? 'Mostrar nombres del menú' : 'Ocultar nombres del menú'}
+          title={collapsed ? 'Mostrar nombres' : 'Ocultar nombres'}
+          onClick={() => setCollapsed(!collapsed)}
+        >
+          {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+        </button>
+      </div>
       <div className="nav-scroll">
         {menu.map(group => <div className="nav-group" key={group.section}>
-          {!collapsed && <div className="nav-section">{group.section}</div>}
+          <div className="nav-section">{group.section}</div>
           {group.items.map(item => <button key={item.label} className={page === item.label ? 'nav-item active' : 'nav-item'} onClick={() => { setPage(item.label); setQuery(''); setMobileNavOpen(false) }} title={item.label}>
             <item.icon size={19} /><span>{item.label}</span>{item.label === 'Inventario' && <b>3</b>}
           </button>)}
@@ -190,7 +202,7 @@ function App() {
         <button className="nav-item" onClick={() => void checkForUpdates()}><RefreshCw size={19} /><span>Buscar actualización</span></button>
         <button className="nav-item" onClick={() => setInfoPanel('settings')}><Settings size={19} /><span>Configuración</span></button>
         {isSupabaseConfigured && <button className="nav-item" onClick={() => void signOut()}><LogOut size={19} /><span>Cerrar sesión</span></button>}
-        <div className="user-card"><div className="avatar">AT</div>{!collapsed && <><div><strong>Ana Torres</strong><small>Administradora</small></div><MoreHorizontal size={18} /></>}</div>
+        <div className="user-card"><div className="avatar">AT</div><div><strong>Ana Torres</strong><small>Administradora</small></div><MoreHorizontal size={18} /></div>
       </div>
     </aside>
 
