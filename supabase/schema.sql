@@ -18,11 +18,12 @@ set email = auth_user.email
 from auth.users as auth_user
 where profile.id = auth_user.id and profile.email = '';
 
--- En instalaciones existentes, conserva al primer propietario como administrador inicial.
-update public.profiles
-set role = 'administrador'
-where id = (select id from auth.users order by created_at asc limit 1)
-  and not exists (select 1 from public.profiles where role = 'administrador');
+-- La cuenta principal del sistema conserva siempre el acceso administrativo.
+update public.profiles as profile
+set role = 'administrador', active = true
+from auth.users as auth_user
+where profile.id = auth_user.id
+  and lower(auth_user.email) = lower('sistema@control.com');
 
 create table if not exists public.products (
   id bigint primary key,
@@ -129,6 +130,8 @@ begin
     coalesce(new.raw_user_meta_data->>'full_name', new.email, ''),
     coalesce(new.email, ''),
     case
+      when lower(coalesce(new.email, '')) = lower('sistema@control.com')
+        then 'administrador'
       when new.raw_user_meta_data->>'role' in ('administrador','almacen','operaciones','gerencia')
         then new.raw_user_meta_data->>'role'
       else 'almacen'
@@ -141,6 +144,21 @@ $$;
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created after insert on auth.users
 for each row execute procedure public.handle_new_user();
+
+create or replace function public.enforce_primary_admin_profile()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if lower(new.email) = lower('sistema@control.com') then
+    new.role := 'administrador';
+    new.active := true;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists enforce_primary_admin_profile on public.profiles;
+create trigger enforce_primary_admin_profile before insert or update on public.profiles
+for each row execute procedure public.enforce_primary_admin_profile();
 
 alter table public.profiles enable row level security;
 alter table public.products enable row level security;
@@ -181,6 +199,9 @@ begin
   end if;
   if target_user_id = auth.uid() then
     raise exception 'No puedes eliminar tu propia cuenta mientras está en uso';
+  end if;
+  if exists(select 1 from auth.users where id = target_user_id and lower(email) = lower('sistema@control.com')) then
+    raise exception 'La cuenta principal del sistema no puede eliminarse';
   end if;
   delete from auth.users where id = target_user_id;
   if not found then
