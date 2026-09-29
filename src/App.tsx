@@ -18,11 +18,13 @@ import type { Movement, Product, StockStatus, WorkOrder } from './types'
 import {
   isSupabaseConfigured, loadCentralData, removeCentralProduct, saveCentralOrder,
   saveCentralProduct, signIn, signOut, supabase, loadCentralMovements, saveCentralMovement,
-  loadCentralDirectory, saveCentralDirectory,
+  loadCentralDirectory, saveCentralDirectory, loadCentralUsers, registerCentralUser, updateCentralUser,
 } from './lib/supabase'
+import type { SystemUser } from './lib/supabase'
 import { QRCodeSVG } from 'qrcode.react'
 
 type Page = 'Dashboard' | 'Inventario' | 'Movimientos' | 'Órdenes de trabajo' | 'Costos y rentabilidad' | 'Clientes' | 'Proveedores' | 'Reportes' | 'Usuarios'
+type UserFormData = { fullName: string; email: string; role: SystemUser['role']; password: string; active: boolean }
 type UpdateState = { status: 'available' | 'downloading' | 'downloaded' | 'error'; version?: string; releaseName?: string; releaseDate?: string; percent?: number; message?: string }
 
 const menu: { section: string; items: { label: Page; icon: typeof LayoutDashboard }[] }[] = [
@@ -83,7 +85,7 @@ function App() {
   const [userEmail, setUserEmail] = useState(isSupabaseConfigured ? '' : 'Modo local')
   const [syncing, setSyncing] = useState(false)
   const [update, setUpdate] = useState<UpdateState | null>(null)
-  const [appVersion, setAppVersion] = useState('1.2.3')
+  const [appVersion, setAppVersion] = useState('1.2.4')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [mobileAccess, setMobileAccess] = useState<{ url: string; local: boolean } | null>(null)
   const [infoPanel, setInfoPanel] = useState<'settings' | 'help' | 'notifications' | null>(null)
@@ -446,7 +448,30 @@ function Reports({notify}:{notify:(s:string)=>void}){const reports=[['Inventario
 const exportSummary=()=>{downloadCsv('reporte-ejecutivo-ferdel.csv',['Reporte','Descripción','Resumen'],reports.map(([title,desc,,meta])=>[String(title),String(desc),String(meta)]));notify('Reporte ejecutivo descargado')}
 return <><PageHeading eyebrow="ANÁLISIS" title="Centro de reportes" subtitle="Genera, filtra y exporta información para la toma de decisiones."/><div className="report-hero"><div><FileBarChart size={30}/><div><strong>Reporte ejecutivo mensual</strong><span>Resumen consolidado de operaciones · Septiembre 2026</span></div></div><button className="btn light" onClick={exportSummary}><Download size={17}/> Generar reporte</button></div><div className="report-grid">{reports.map(([title,desc,Icon,meta])=><article className="report-card" key={String(title)}><div className="report-icon"><Icon size={22}/></div><div><strong>{String(title)}</strong><p>{String(desc)}</p><span>{String(meta)}</span></div><button title="Descargar reporte" onClick={()=>{downloadCsv(`${String(title).toLowerCase().replaceAll(' ','-')}.csv`,['Reporte','Descripción','Resumen'],[[String(title),String(desc),String(meta)]]);notify(`${title} descargado`)}}><Download size={17}/></button></article>)}</div><section className="panel export-panel"><PanelHead title="Exportación rápida" subtitle="Selecciona el formato de salida"/><div><button onClick={exportSummary}><FileSpreadsheet size={24}/><span><strong>Microsoft Excel</strong><small>CSV compatible con Excel</small></span></button><button onClick={()=>{window.print();notify('Vista de impresión abierta')}}><FileText size={24}/><span><strong>Documento PDF</strong><small>Guardar desde la ventana de impresión</small></span></button></div></section></>}
 
-function UsersPage({notify}:{notify:(s:string)=>void}){const [users,setUsers]=useState<string[][]>([['Ana Torres','ana.torres@ferdel.pe','Administradora','AT'],['Marco Ruiz','marco.ruiz@ferdel.pe','Almacén','MR'],['Carlos Mendoza','carlos.mendoza@ferdel.pe','Operaciones','CM'],['Lucía Paredes','lucia.paredes@ferdel.pe','Gerencia','LP']]);const [editing,setEditing]=useState<string[]|'new'|null>(null);const save=(user:string[])=>{setUsers(editing==='new'?[...users,user]:users.map(item=>item[1]===user[1]?user:item));setEditing(null);notify('Usuario guardado correctamente')};return <><PageHeading eyebrow="SEGURIDAD" title="Usuarios y permisos" subtitle="Administra accesos, roles y actividad del sistema." actions={<button className="btn primary" onClick={()=>setEditing('new')}><Plus size={18}/> Nuevo usuario</button>}/><section className="panel table-panel"><div className="table-wrap"><table><thead><tr><th>USUARIO</th><th>CORREO</th><th>ROL</th><th>ÚLTIMO ACCESO</th><th>ESTADO</th><th/></tr></thead><tbody>{users.map((u,i)=><tr key={u[1]}><td><div className="person"><div>{u[3]}</div><strong>{u[0]}</strong></div></td><td>{u[1]}</td><td><span className="role-chip"><ShieldCheck size={14}/>{u[2]}</span></td><td>{i===0?'Ahora':`${i+1} h atrás`}</td><td><span className="status normal">Activo</span></td><td><button className="icon-button" title="Editar usuario" onClick={()=>setEditing(u)}><Pencil size={16}/></button></td></tr>)}</tbody></table></div></section>{editing&&<UserModal value={editing} onClose={()=>setEditing(null)} onSave={save}/>}</>}
+const roleLabels: Record<SystemUser['role'], string> = { administrador: 'Administradora', almacen: 'Almacén', operaciones: 'Operaciones', gerencia: 'Gerencia' }
+
+function UsersPage({notify}:{notify:(s:string)=>void}){
+  const [users,setUsers]=useState<SystemUser[]>([])
+  const [editing,setEditing]=useState<SystemUser|'new'|null>(null)
+  const [loading,setLoading]=useState(isSupabaseConfigured)
+  useEffect(()=>{
+    if(!isSupabaseConfigured){setLoading(false);return}
+    void loadCentralUsers().then(setUsers).catch(error=>notify(`No se pudieron cargar los usuarios: ${error.message}`)).finally(()=>setLoading(false))
+  },[])
+  const save=async(form:UserFormData)=>{
+    if(editing==='new'){
+      const created=await registerCentralUser(form)
+      setUsers(current=>[...current,created])
+      notify('Usuario creado en el autenticador correctamente')
+    }else if(editing){
+      await updateCentralUser(editing.id,{fullName:form.fullName,role:form.role,active:form.active})
+      setUsers(current=>current.map(user=>user.id===editing.id?{...user,fullName:form.fullName,role:form.role,active:form.active}:user))
+      notify('Usuario actualizado correctamente')
+    }
+    setEditing(null)
+  }
+  return <><PageHeading eyebrow="SEGURIDAD" title="Usuarios y permisos" subtitle="Administra cuentas reales, contraseñas y niveles de acceso." actions={<button className="btn primary" onClick={()=>setEditing('new')}><Plus size={18}/> Nuevo usuario</button>}/><section className="panel table-panel"><div className="table-wrap"><table><thead><tr><th>USUARIO</th><th>CORREO</th><th>ROL</th><th>REGISTRADO</th><th>ESTADO</th><th/></tr></thead><tbody>{loading?<tr><td colSpan={6}>Cargando usuarios…</td></tr>:users.length?users.map(user=>{const initials=user.fullName.split(' ').filter(Boolean).map(part=>part[0]).join('').slice(0,2).toUpperCase();return <tr key={user.id}><td><div className="person"><div>{initials}</div><strong>{user.fullName}</strong></div></td><td>{user.email||'Correo no sincronizado'}</td><td><span className="role-chip"><ShieldCheck size={14}/>{roleLabels[user.role]}</span></td><td>{new Date(user.createdAt).toLocaleDateString('es-PE')}</td><td><span className={`status ${user.active?'normal':'cancelada'}`}>{user.active?'Activo':'Inactivo'}</span></td><td><button className="icon-button" title="Editar usuario" onClick={()=>setEditing(user)}><Pencil size={16}/></button></td></tr>}):<tr><td colSpan={6}>No hay usuarios registrados.</td></tr>}</tbody></table></div></section>{editing&&<UserModal value={editing} onClose={()=>setEditing(null)} onSave={save}/>}</>
+}
 
 function PanelHead({title,subtitle,action}:{title:string,subtitle:string,action?:React.ReactNode}){return <div className="panel-head"><div><h2>{title}</h2><p>{subtitle}</p></div>{action}</div>}
 function TableFooter({count,label}:{count:number,label:string}){return <div className="table-footer"><span>Mostrando <strong>{count}</strong> {label}</span><div><button disabled><ChevronLeft size={16}/></button><button className="current">1</button><button disabled><ChevronRight size={16}/></button></div></div>}
@@ -478,11 +503,12 @@ function DirectoryModal({type,value,onClose,onSave}:{type:'Clientes'|'Proveedore
   return <Modal title={`${value==='new'?'Nuevo':'Editar'} ${type.slice(0,-1).toLowerCase()}`} subtitle="Completa la información del directorio" onClose={onClose}><form onSubmit={event=>{event.preventDefault();onSave(form)}}><div className="form-grid">{labels.map((label,index)=><label className={index===4?'span-2':''} key={label}><span>{label}</span><input required value={form[index]} onChange={event=>setForm(form.map((item,i)=>i===index?event.target.value:item))}/></label>)}</div><div className="modal-actions"><button type="button" className="btn secondary" onClick={onClose}>Cancelar</button><button className="btn primary"><Save size={17}/> Guardar</button></div></form></Modal>
 }
 
-function UserModal({value,onClose,onSave}:{value:string[]|'new',onClose:()=>void,onSave:(user:string[])=>void}){
-  const initial=value==='new'?['','','Almacén','']:value
-  const [form,setForm]=useState<string[]>(initial)
-  const update=(index:number,next:string)=>setForm(form.map((item,i)=>i===index?next:item))
-  return <Modal title={value==='new'?'Nuevo usuario':'Editar usuario'} subtitle="Información y nivel de acceso" onClose={onClose}><form onSubmit={event=>{event.preventDefault();const initials=form[0].split(' ').filter(Boolean).map(part=>part[0]).join('').slice(0,2).toUpperCase();onSave([form[0],form[1],form[2],initials])}}><div className="form-grid"><label><span>Nombres y apellidos</span><input required value={form[0]} onChange={event=>update(0,event.target.value)}/></label><label><span>Correo corporativo</span><input type="email" required value={form[1]} onChange={event=>update(1,event.target.value)}/></label><label className="span-2"><span>Rol</span><select value={form[2]} onChange={event=>update(2,event.target.value)}><option>Administradora</option><option>Almacén</option><option>Operaciones</option><option>Gerencia</option></select></label></div><div className="modal-actions"><button type="button" className="btn secondary" onClick={onClose}>Cancelar</button><button className="btn primary"><Save size={17}/> Guardar usuario</button></div></form></Modal>
+function UserModal({value,onClose,onSave}:{value:SystemUser|'new',onClose:()=>void,onSave:(user:UserFormData)=>Promise<void>}){
+  const [form,setForm]=useState<UserFormData>(value==='new'?{fullName:'',email:'',role:'almacen',password:'',active:true}:{fullName:value.fullName,email:value.email,role:value.role,password:'',active:value.active})
+  const [saving,setSaving]=useState(false)
+  const [error,setError]=useState('')
+  const submit=async(event:React.FormEvent)=>{event.preventDefault();setSaving(true);setError('');try{await onSave(form)}catch(reason){setError(reason instanceof Error?reason.message:'No se pudo guardar el usuario');setSaving(false)}}
+  return <Modal title={value==='new'?'Nuevo usuario':'Editar usuario'} subtitle={value==='new'?'Crea una cuenta real con acceso al sistema':'Actualiza el perfil y nivel de acceso'} onClose={onClose}><form onSubmit={submit}><div className="form-grid"><label><span>Nombres y apellidos</span><input required value={form.fullName} onChange={event=>setForm({...form,fullName:event.target.value})}/></label><label><span>Correo corporativo</span><input type="email" required readOnly={value!=='new'} value={form.email} onChange={event=>setForm({...form,email:event.target.value})}/></label>{value==='new'&&<label className="span-2"><span>Contraseña inicial</span><input type="password" required minLength={8} autoComplete="new-password" value={form.password} onChange={event=>setForm({...form,password:event.target.value})} placeholder="Mínimo 8 caracteres"/><small className="field-help">El usuario usará esta contraseña para iniciar sesión.</small></label>}<label className="span-2"><span>Rol</span><select value={form.role} onChange={event=>setForm({...form,role:event.target.value as SystemUser['role']})}><option value="administrador">Administradora</option><option value="almacen">Almacén</option><option value="operaciones">Operaciones</option><option value="gerencia">Gerencia</option></select></label>{value!=='new'&&<label className="span-2"><span>Estado</span><select value={form.active?'activo':'inactivo'} onChange={event=>setForm({...form,active:event.target.value==='activo'})}><option value="activo">Activo</option><option value="inactivo">Inactivo</option></select></label>}{error&&<div className="login-error span-2"><AlertTriangle size={15}/>{error}</div>}</div><div className="modal-actions"><button type="button" className="btn secondary" onClick={onClose} disabled={saving}>Cancelar</button><button className="btn primary" disabled={saving}><Save size={17}/>{saving?'Guardando…':value==='new'?'Crear cuenta':'Guardar cambios'}</button></div></form></Modal>
 }
 
 function ProductModal({value,onClose,onSave}:{value:Product|'new',onClose:()=>void,onSave:(p:Product)=>void}){

@@ -6,10 +6,23 @@ create extension if not exists pgcrypto;
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   full_name text not null default '',
+  email text not null default '',
   role text not null default 'almacen' check (role in ('administrador','almacen','operaciones','gerencia')),
   active boolean not null default true,
   created_at timestamptz not null default now()
 );
+
+alter table public.profiles add column if not exists email text not null default '';
+update public.profiles as profile
+set email = auth_user.email
+from auth.users as auth_user
+where profile.id = auth_user.id and profile.email = '';
+
+-- En instalaciones existentes, conserva al primer propietario como administrador inicial.
+update public.profiles
+set role = 'administrador'
+where id = (select id from auth.users order by created_at asc limit 1)
+  and not exists (select 1 from public.profiles where role = 'administrador');
 
 create table if not exists public.products (
   id bigint primary key,
@@ -110,8 +123,17 @@ create table if not exists public.audit_logs (
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
-  insert into public.profiles (id, full_name)
-  values (new.id, coalesce(new.raw_user_meta_data->>'full_name', new.email, ''));
+  insert into public.profiles (id, full_name, email, role)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'full_name', new.email, ''),
+    coalesce(new.email, ''),
+    case
+      when new.raw_user_meta_data->>'role' in ('administrador','almacen','operaciones','gerencia')
+        then new.raw_user_meta_data->>'role'
+      else 'almacen'
+    end
+  );
   return new;
 end;
 $$;
@@ -131,6 +153,7 @@ alter table public.audit_logs enable row level security;
 
 drop policy if exists "Usuarios autenticados leen perfiles" on public.profiles;
 drop policy if exists "Usuario actualiza su perfil" on public.profiles;
+drop policy if exists "Administradores actualizan perfiles" on public.profiles;
 drop policy if exists "Usuarios autenticados gestionan productos" on public.products;
 drop policy if exists "Usuarios autenticados gestionan OT" on public.work_orders;
 drop policy if exists "Usuarios autenticados gestionan clientes" on public.clients;
@@ -141,7 +164,14 @@ drop policy if exists "Usuarios autenticados leen auditoría" on public.audit_lo
 drop policy if exists "Usuarios autenticados crean auditoría" on public.audit_logs;
 
 create policy "Usuarios autenticados leen perfiles" on public.profiles for select to authenticated using (true);
-create policy "Usuario actualiza su perfil" on public.profiles for update to authenticated using (auth.uid() = id) with check (auth.uid() = id);
+create or replace function public.current_user_is_admin()
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists(select 1 from public.profiles where id = auth.uid() and role = 'administrador' and active);
+$$;
+revoke all on function public.current_user_is_admin() from public;
+grant execute on function public.current_user_is_admin() to authenticated;
+create policy "Administradores actualizan perfiles" on public.profiles for update to authenticated
+using (public.current_user_is_admin()) with check (public.current_user_is_admin());
 create policy "Usuarios autenticados gestionan productos" on public.products for all to authenticated using (true) with check (true);
 create policy "Usuarios autenticados gestionan OT" on public.work_orders for all to authenticated using (true) with check (true);
 create policy "Usuarios autenticados gestionan clientes" on public.clients for all to authenticated using (true) with check (true);

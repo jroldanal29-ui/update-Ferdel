@@ -13,6 +13,15 @@ export const supabase = isSupabaseConfigured
     })
   : null
 
+export type SystemUser = {
+  id: string
+  fullName: string
+  email: string
+  role: 'administrador' | 'almacen' | 'operaciones' | 'gerencia'
+  active: boolean
+  createdAt: string
+}
+
 type ProductRow = {
   id: number; code: string; name: string; description: string | null; category: string
   brand: string; unit: string; stock: number; min_stock: number; max_stock: number
@@ -134,9 +143,63 @@ export async function saveCentralDirectory(type: 'Clientes' | 'Proveedores', row
   if (error) throw error
 }
 
+export async function loadCentralUsers(): Promise<SystemUser[]> {
+  const client = requireClient()
+  const result = await client.from('profiles').select('id, full_name, email, role, active, created_at').order('created_at')
+  if (result.error) {
+    // Compatibilidad mientras se aplica la columna email del esquema actualizado.
+    const fallback = await client.from('profiles').select('id, full_name, role, active, created_at').order('created_at')
+    if (fallback.error) throw fallback.error
+    return (fallback.data ?? []).map((row: any) => ({
+      id: row.id, fullName: row.full_name, email: '', role: row.role,
+      active: row.active, createdAt: row.created_at,
+    }))
+  }
+  return (result.data ?? []).map((row: any) => ({
+    id: row.id, fullName: row.full_name, email: row.email ?? '', role: row.role,
+    active: row.active, createdAt: row.created_at,
+  }))
+}
+
+export async function registerCentralUser(input: { fullName: string; email: string; password: string; role: SystemUser['role'] }): Promise<SystemUser> {
+  if (!url || !publishableKey) throw new Error('El servidor central no está configurado')
+  // Cliente aislado: crear otra cuenta no reemplaza la sesión del administrador actual.
+  const registrationClient = createClient(url, publishableKey, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  })
+  const { data, error } = await registrationClient.auth.signUp({
+    email: input.email.trim().toLowerCase(),
+    password: input.password,
+    options: { data: { full_name: input.fullName.trim(), role: input.role } },
+  })
+  if (error) throw error
+  if (!data.user) throw new Error('El autenticador no devolvió el usuario creado')
+  if (data.user.identities?.length === 0) throw new Error('Este correo ya se encuentra registrado')
+  return {
+    id: data.user.id,
+    fullName: input.fullName.trim(),
+    email: data.user.email ?? input.email.trim().toLowerCase(),
+    role: input.role,
+    active: true,
+    createdAt: data.user.created_at,
+  }
+}
+
+export async function updateCentralUser(id: string, input: { fullName: string; role: SystemUser['role']; active: boolean }) {
+  const { error } = await requireClient().from('profiles').update({
+    full_name: input.fullName.trim(), role: input.role, active: input.active,
+  }).eq('id', id)
+  if (error) throw error
+}
+
 export async function signIn(email: string, password: string) {
   const result = await requireClient().auth.signInWithPassword({ email, password })
   if (result.error) throw result.error
+  const profile = await requireClient().from('profiles').select('active').eq('id', result.data.user.id).maybeSingle()
+  if (profile.data?.active === false) {
+    await requireClient().auth.signOut()
+    throw new Error('Esta cuenta se encuentra inactiva')
+  }
   return result.data
 }
 

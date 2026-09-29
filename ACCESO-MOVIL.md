@@ -6,7 +6,7 @@ La aplicación móvil está publicada en:
 
 `https://jroldanal29-ui.github.io/update-Ferdel/`
 
-El QR de la versión 1.2.3 y posteriores utiliza esta dirección. El celular puede conectarse con datos móviles y la computadora puede estar en otra red Wi-Fi o incluso apagada. Ambos dispositivos consultan directamente la misma base central.
+El QR de la versión 1.2.4 y posteriores utiliza esta dirección. El celular puede conectarse con datos móviles y la computadora puede estar en otra red Wi-Fi o incluso apagada. Ambos dispositivos consultan directamente la misma base central.
 
 1. Abre FERDEL Gestión y presiona **Acceso móvil**.
 2. Escanea el QR con la cámara del celular.

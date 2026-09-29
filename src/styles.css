@@ -18,3 +18,4 @@
 
 /* Identidad visual oficial de FERDEL. */
 .brand{min-width:0;display:flex;align-items:center}.brand img{object-fit:contain}.brand-symbol{display:none;width:43px;height:43px;background:#fff;border-radius:10px;padding:3px;box-shadow:0 5px 14px rgba(2,13,31,.2)}.brand-wordmark{display:block;width:174px;height:56px;background:#fff;border-radius:9px;padding:5px 8px;box-shadow:0 5px 14px rgba(2,13,31,.16)}.brand-compact .brand-wordmark,.collapsed .brand-wordmark{display:none}.brand-compact .brand-symbol,.collapsed .brand-symbol{display:block}.login-aside .brand-wordmark{width:224px;height:72px}.auth-loading .brand-wordmark{width:210px;height:68px}
+.field-help{display:block;margin-top:5px;color:#8a95a5;font-size:8px;line-height:1.4}
